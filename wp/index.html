@@ -1,0 +1,158 @@
+<link rel="stylesheet" href="https://d-m-81.github.io/vite.github.io/style.css">
+<h1 class="wp-block-heading">ViteでWordPressテーマ開発環境を構築</h1>
+<h2 class="wp-block-heading">開発用のJavaScriptファイル (main.js)とCSS (style.css)ファイルをHMRに対応させる</h2>
+<p><strong>1.</strong><br>ターミナルでテーマディレクトリに移動します。XAMPPのデフォルト設定なら、以下のようになります。</p>
+<pre class="wp-block-code"><code>cd C:\xampp\htdocs\wordpress\wp-content\themes\twentytwentyfive</code></pre>
+<p><strong>2.</strong><br>Node.jsプロジェクトの初期化</p>
+<pre class="wp-block-code"><code>npm init -y</code></pre>
+<p><strong>3.</strong><br>Viteのインストール<br></p>
+<pre class="wp-block-code"><code>npm install --save-dev vite</code></pre>
+<p><strong>4.</strong><br>ソースファイル用ディレクトリの作成<br>テーマ内に src という名前のフォルダを作成し、その中に開発用のJavaScriptファイル (main.js) とCSSファイル (style.css) を作成します。<br>twentytwentyfive/src/main.js<br>twentytwentyfive/src/style.css</p>
+<p><strong>5.</strong><br>vite.config.js の作成<br>テーマのルートディレクトリ (twentytwentyfive) に vite.config.js というファイルを作成し、以下の内容を記述します。</p>
+<pre class="wp-block-code"><code>import { defineConfig } from 'vite';
+
+export default defineConfig({
+  // プラグインが必要な場合はここに追記 (例: @vitejs/plugin-react)
+  plugins: [],
+
+  // ビルド設定
+  build: {
+    // ビルド成果物の出力先
+    outDir: 'dist',
+    // ビルド前に出力先を空にする
+    emptyOutDir: true,
+    // manifest.json を生成する
+    manifest: true,
+    // ビルドのエントリーポイント
+    rollupOptions: {
+      input: './src/main.js',
+    },
+  },
+
+  // 開発サーバー設定
+  server: {
+    // Vite開発サーバーのオリジン
+    origin: 'http://localhost:5173',
+    // HMRを機能させるための設定
+    hmr: {
+      host: 'localhost',
+    },
+  },
+});</code></pre>
+<p><strong>6.</strong><br>package.json の編集<br>package.json ファイルを開き、"scripts" の部分を以下のように編集します。これにより、npm run dev と npm run build コマンドが使えるようになります。<br></p>
+<pre class="wp-block-code"><code>"scripts": {
+  "dev": "vite",
+  "build": "vite build"
+},</code></pre>
+<p><strong>7.</strong><br>WordPressとの連携 (functions.php)<br>最後に、functions.php を編集して、Viteで生成されたCSSとJSをWordPressが読み込むように設定します。以下のコードを functions.php の末尾に追記してください。<br>このコードは、開発モード (npm run dev) と本番モード (npm run build) を自動で判別し、適切なファイルを読み込みます。</p>
+<pre class="wp-block-code"><code>/**
+ * Viteで管理されているアセット（JavaScriptやCSS）をWordPressに読み込ませるための関数
+ * 開発モード（Vite開発サーバーが起動している）か本番モード（ビルド済みファイルがある）かを自動で判別し、
+ * 適切なファイルを読み込みます。
+ */
+function vite_asset_loader() {
+  // 開発モードかどうかを判定するフラグを初期化
+  $is_dev = false;
+
+  // 現在のサイトURLに 'localhost' が含まれている場合のみ、Vite開発サーバーのチェックを行う
+  // これにより、本番環境で不要なチェック処理が走るのを防ぐ
+  if (strpos(get_site_url(), 'localhost') !== false) {
+    // fsockopenを使ってViteの開発サーバー（デフォルトではlocalhost:5173）が起動しているかを確認
+    // @は、サーバーが起動していない場合に発生する警告エラーを抑制するためのもの
+    // タイムアウトを1秒に設定
+    $socket = @fsockopen('localhost', 5173, $errno, $errstr, 1);
+
+    // ソケット接続に成功した場合
+    if ($socket) {
+      // 開発モードであると判定
+      $is_dev = true;
+      // 開いたソケット接続を閉じる
+      fclose($socket);
+    }
+  }
+
+  // 開発モードの場合の処理
+  if ($is_dev) {
+    // 開発モード（HMR:ホットモジュールリプレイスメント）用のViteクライアントを読み込む
+    // 'type="module"' を付けるために wp_enqueue_script_module を使用
+    wp_enqueue_script_module('vite-client', 'http://localhost:5173/@vite/client', [], null, true);
+    // メインのJavaScriptファイルをVite開発サーバーから直接読み込む
+    wp_enqueue_script_module('vite-main-js', 'http://localhost:5173/src/main.js', [], null, true);
+  // 本番モードの場合の処理
+  } else {
+    // ビルド時に生成される manifest.json のパスを取得
+    $manifest_path = get_theme_file_path('dist/manifest.json');
+
+    // manifest.json が存在しない場合は、何もせず処理を終了（ビルドされていない可能性）
+    if (!file_exists($manifest_path)) {
+      return;
+    }
+
+    // manifest.json ファイルを読み込み、PHPの連想配列に変換
+    $manifest = json_decode(file_get_contents($manifest_path), true);
+
+    // manifest.json からビルド後のメインJavaScriptファイル名を取得し、存在すれば実行
+    if (!empty($manifest['./src/main.js']['file'])) {
+      // ビルド後のJSファイルのURLを生成
+      $js_file = get_theme_file_uri('dist/' . $manifest['./src/main.js']['file']);
+      // WordPressの作法に則ってJSファイルを読み込みキューに追加
+      // 第5引数を true にすると &lt;/body&gt; タグの直前に出力される
+      wp_enqueue_script('vite-main-js', $js_file, [], null, true);
+    }
+
+    // main.js に関連付けられたCSSファイルが存在すれば実行
+    if (!empty($manifest['./src/main.js']['css'])) {
+      // 関連CSSが複数ある場合を考慮してループ処理
+      foreach ($manifest['./src/main.js']['css'] as $css_file) {
+        // ビルド後のCSSファイルのURLを生成
+        $css_path = get_theme_file_uri('dist/' . $css_file);
+        // WordPressの作法に則ってCSSファイルを読み込みキューに追加
+        // ハンドル名をユニークにするため、本来は$css_fileを元に動的に命名するのが望ましい
+        wp_enqueue_style('vite-main-css-' . sanitize_title($css_file), $css_path, [], null);
+      }
+    }
+  }
+}
+
+// 'wp_enqueue_scripts' アクションフックに上記で定義した関数を登録
+// これにより、WordPressがフロントエンドのスクリプトやスタイルを読み込むタイミングでこの関数が実行される
+add_action('wp_enqueue_scripts', 'vite_asset_loader');</code></pre>
+<p>補足: このコードは、Vite開発サーバーが起動するとテーマのルートに hot というファイルが作成されることを前提としています。vite-plugin-simple-hot のようなプラグインを追加するか、package.json の dev スクリプトを "dev": "touch hot &amp;&amp; vite", のように変更することでこのファイルを作成できます（ただし環境に依存します）。よりシンプルな方法として、開発中はfunctions.phpの$is_devをtrueに手動で設定する方法もあります。</p>
+<p><strong>8.</strong><br>WordPressのルートディレクトリにある wp-config.php ファイルを開き、/* That's all, stop editing! Happy publishing. */ という行の上に、以下の1行を追加します。</p>
+<pre class="wp-block-code"><code>define('VITE_DEVELOPMENT', true); // Viteでの開発中はtrue、本番はfalse
+/* That's all, stop editing! Happy publishing. */</code></pre>
+<p>これで、WordPressに対して「Viteの開発モードが有効である」と伝えることができます。</p>
+<h2 class="wp-block-heading">テーマ内の partsディレクトリや templatesディレクトリの中のファイルも HMRに対応させる</h2>
+<p><strong>1.</strong><br>ターミナルでテーマディレクトリに移動し、以下のコマンドを実行してプラグインをインストールします。<br></p>
+<pre class="wp-block-code"><code>npm install --save-dev vite-plugin-full-reload</code></pre>
+<p><strong>2.</strong><br>以下の内容を参考に、ご自身の vite.config.js にプラグインのインポートと plugins 配列への追加を行ってください。<br></p>
+<pre class="wp-block-code"><code>import { defineConfig } from 'vite';
+import fullReload from 'vite-plugin-full-reload'; // 👈 この行を追加
+
+export default defineConfig({
+  // プラグインの設定
+  plugins: [
+    fullReload([
+      'templates/**/*.html', // 👈 templatesフォルダ内の全HTMLファイル
+      'parts/**/*.html',     // 👈 partsフォルダ内の全HTMLファイル
+      '*.php',               // 👈 functions.phpなどテーマ直下のPHPファイル
+    ]),
+  ],
+
+  // --- 以下は既存の設定（前回のまま） ---
+  build: {
+    outDir: 'dist',
+    emptyOutDir: true,
+    manifest: true,
+    rollupOptions: {
+      input: './src/main.js',
+    },
+  },
+  server: {
+    origin: 'http://localhost:5173',
+    hmr: {
+      host: 'localhost',
+    },
+  },
+});</code></pre>
+<p><a href="https://d-m-81.github.io/vite.github.io/">index of vite</a></p>

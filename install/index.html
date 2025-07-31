@@ -1,0 +1,100 @@
+<link rel="stylesheet" href="https://d-m-81.github.io/vite.github.io/style.css">
+<h1 class="wp-block-heading">Viteのインストール</h1>
+<p><strong>1.</strong><br>Viteをインストールしてプロジェクトの作成をします。</p>
+<pre class="wp-block-code"><code>npm create vite@latest .</code></pre>
+<p><strong>2.</strong><br>npmをインストールします。</p>
+<pre class="wp-block-code"><code>npm i</code></pre>
+<p><strong>3.</strong><br>vite.config.jsを作成してViteのビルドの設定をします。</p>
+<pre class="wp-block-code"><code>// Viteの設定ヘルパーをインポートします。これによりエディタで入力補完が効くようになります。
+import { defineConfig } from 'vite'
+//import { resolve } from 'path'
+
+// Viteの設定をエクスポートします。
+export default defineConfig({
+  // 本番ビルドに関する設定
+  build : {
+    // アセットが出力されるディレクトリを指定します。（この行はコメントアウトされています）
+    // assetsDir: './assets/',
+
+    // trueの場合、ビルド時に出力先ディレクトリ（デフォルトは'dist'）の中身を空にします。
+    emptyOutDir: true,
+
+    // Viteが内部で使用するビルドツール「Rollup」の詳細な設定を行います。
+    rollupOptions: {
+
+      // 出力されるファイルに関する設定
+      output: {
+        // アセットファイル（画像、フォント、CSSなど）の出力ファイル名をカスタマイズします。
+        assetFileNames: (assetInfo) => {
+
+          // 元のファイル名から拡張子を取得します (例: 'style.css' -> 'css')
+          // assetInfo.name には 'src/sass/style.scss' のような元のパスが入ることがあります。
+          // そのため、ファイル名の末尾から拡張子を取得するのがより安全です。
+          let extType = assetInfo.name.split('.').pop();
+
+          // CSSファイルの場合
+          if (extType === 'css') {
+            // CSSは 'css/style.css' という固定のファイル名で出力する
+            return `css/style.css`;
+          }
+          // 上記以外のファイル（フォントや画像など）は、
+          // {分類されたディレクトリ名}/{元のファイル名}.{元の拡張子} の形式で出力します。
+          // 例: 'fonts/my-font.woff2'
+          return `${extType}/[name][extname]`;
+        },
+
+        // コード分割によって生成されるJavaScriptファイル（チャンク）の出力形式
+        chunkFileNames: 'js/[name].js',
+
+        // エントリーポイントから生成されるJavaScriptファイルの出力形式
+        entryFileNames: 'js/[name].js',
+      },
+    },
+  },
+})</code></pre>
+<p>画像はpublic/img内に置かれている場合、ビルドされたファイルの構成か下記のようになります。</p>
+<pre class="wp-block-code"><code>dist/
+├── index.html
+├── css/
+│   └── style.css
+├── js/
+│   └── main.js
+└── img/
+    ├── typescript.svg
+    └── vite.svg</code></pre>
+<p><strong>4.</strong><br>Live Sass Compilerの設定をVSCodeのワークスペースの設定ファイルで行います。</p>
+<pre class="wp-block-code"><code>{
+  // VS Codeで開くフォルダの設定
+  "folders": [
+    {
+      // 現在のフォルダ (プロジェクトのルート) をワークスペースとして開く
+      "path": "."
+    }
+  ],
+  // VS Codeの各種設定
+  "settings": {
+    // Live SASS Compile: CSSソースマップを生成するかどうか (trueに設定すると生成される)
+    "liveSassCompile.settings.generateMap": true,
+    // Live SASS Compile: コンパイルされるCSSの出力形式と保存パスの設定
+    "liveSassCompile.settings.formats": [
+      {
+        // 出力形式を「expanded」(展開された、整形されたCSS) に設定
+        "format": "expanded",
+        // 出力されるファイルの拡張子を「.css」に設定
+        "extensionName": ".css",
+        // 保存パスを現在のワークスペースの「../css」 (親ディレクトリのcssフォルダ) に設定
+        "savePath": "~/../css",
+        // 保存パスの置換ペア (通常はnullで問題ありません)
+        "savePathReplacementPairs": null
+      }
+    ]
+  }
+}</code></pre>
+<hr>
+<p>アプリケーションをローカル環境で実行する。</p>
+<pre class="wp-block-code"><code>npm run dev</code></pre>
+<p>アプリケーションを本番環境にデプロイするために最適化された静的ファイルを生成する。</p>
+<pre class="wp-block-code"><code>npm run build</code></pre>
+<p>ビルドのファイルをローカルでプレビューする。</p>
+<pre class="wp-block-code"><code>npm run preview</code></pre>
+<p><a href="https://d-m-81.github.io/vite.github.io/">index of vite</a></p>
